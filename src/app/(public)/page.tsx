@@ -1,4 +1,28 @@
 
+import type { Metadata } from "next";
+import Link from "next/link";
+import { connection } from "next/server";
+import { Suspense } from "react";
+import Image from "next/image";
+
+import { createClient } from "@/lib/supabase/server";
+
+export const metadata: Metadata = {
+  title: "Nyanyoh Divine | Computer Engineer",
+  description:
+    "Engineering portfolio showcasing networking, software development, embedded systems and practical engineering projects.",
+};
+
+function formatDate(date: string | null) {
+  if (!date) return null;
+
+  return new Date(`${date}T00:00:00`).toLocaleDateString("en-GB", {
+    day: "numeric",
+    month: "long",
+    year: "numeric",
+  });
+}
+
 function EngineeringIllustration() {
   return (
     <div className="hero-visual" aria-label="Animated engineering illustration">
@@ -60,9 +84,72 @@ function SectionHeading({
   );
 }
 
-export default function Home() {
+async function HomeContent() {
+  await connection();
+
+  const supabase = await createClient();
+
+  // Fetch published projects from Supabase.
+  const { data: projectRows, error: projectsError } = await supabase
+    .from("projects")
+    .select(
+      "id, title, slug, summary, description, category, technologies, github_url, live_demo_url, cover_image_path, is_featured, published_at",
+    )
+    .eq("status", "published")
+    .order("is_featured", { ascending: false })
+    .order("published_at", { ascending: false });
+
+  if (projectsError) {
+    console.error("PUBLIC PROJECTS FETCH ERROR:", projectsError);
+  }
+
+  const publishedProjects = projectsError ? [] : (projectRows ?? []);
+
+  // Fetch additional images for the published projects.
+  let projectImages: {
+    id: string;
+    project_id: string;
+    image_path: string;
+    alt_text: string | null;
+    sort_order: number;
+  }[] = [];
+
+  if (publishedProjects.length > 0) {
+    const projectIds = publishedProjects.map((project) => project.id);
+
+    const { data: imageRows, error: imagesError } = await supabase
+      .from("project_images")
+      .select("id, project_id, image_path, alt_text, sort_order")
+      .in("project_id", projectIds)
+      .order("sort_order", { ascending: true });
+
+    if (imagesError) {
+      console.error("PUBLIC PROJECT IMAGES FETCH ERROR:", imagesError);
+    } else {
+      projectImages = imageRows ?? [];
+    }
+  }
+
+  // Fetch published certifications.
+  const { data: certifications, error: certificationError } = await supabase
+    .from("certifications")
+    .select(
+      "id, title, issuing_organization, description, issue_date, expiry_date, credential_id, credential_url, file_path, file_type",
+    )
+    .eq("status", "published")
+    .order("published_at", { ascending: false });
+
+  if (certificationError) {
+    console.error("PUBLIC CERTIFICATIONS FETCH ERROR:", certificationError);
+  }
+
+  const publishedCertifications = certificationError
+    ? []
+    : (certifications ?? []);
+
   return (
     <main>
+      {/* HERO */}
       <section className="hero" id="home">
         <div className="section-container hero-grid">
           <div>
@@ -79,9 +166,8 @@ export default function Home() {
 
             <p className="hero-description">
               I am Nyanyoh Divine, a Computer Engineer focused on Network
-              Engineering and Software Development. I enjoy designing
-              practical technology solutions and turning ideas into working
-              systems.
+              Engineering and Software Development. I enjoy designing practical
+              technology solutions and turning ideas into working systems.
             </p>
 
             <div className="hero-actions">
@@ -103,27 +189,26 @@ export default function Home() {
         </div>
       </section>
 
+      {/* ABOUT */}
       <section className="section section-alt" id="about">
         <div className="section-container about-grid">
           <div>
             <span className="eyebrow">01 / ABOUT ME</span>
-            <h2 className="section-heading">
-              Technology with a purpose.
-            </h2>
+            <h2 className="section-heading">Technology with a purpose.</h2>
           </div>
 
           <div>
             <p className="about-copy">
-              I am a Computer Engineering student at the University of Buea
-              with a strong interest in computer networks, infrastructure,
-              software development and embedded systems.
+              I am a Computer Engineering student at the University of Buea with
+              a strong interest in computer networks, infrastructure, software
+              development and embedded systems.
             </p>
 
             <p className="about-copy">
-              My learning combines practical networking labs, hardware
-              projects and software development. I enjoy understanding how
-              systems work, troubleshooting technical challenges and building
-              solutions that address real-world problems.
+              My learning combines practical networking labs, hardware projects
+              and software development. I enjoy understanding how systems work,
+              troubleshooting technical challenges and building solutions that
+              address real-world problems.
             </p>
 
             <div className="about-highlight">
@@ -137,79 +222,151 @@ export default function Home() {
         </div>
       </section>
 
+      {/* DYNAMIC PROJECTS */}
       <section className="section" id="projects">
         <div className="section-container">
           <SectionHeading
             eyebrow="02 / SELECTED WORK"
             title="Projects & practical experience."
-            description="A selection of engineering work across networking, embedded systems and software. These examples will later be managed through your private admin dashboard."
+            description="Explore my engineering work across networking, embedded systems and software development."
           />
 
-          <div className="project-grid">
-            <article className="project-card">
-              <span className="project-number">PROJECT 01</span>
-              <h3>Smart Traffic Priority System</h3>
-              <p>
-                An ESP32-CAM and YOLO-based prototype designed to detect
-                vehicles, identify emergency vehicles and adjust traffic
-                light priority using MQTT communication.
+          {publishedProjects.length === 0 ? (
+            <div className="rounded-xl border border-slate-200 bg-white p-10 text-center">
+              <h3 className="text-xl font-semibold text-slate-900">
+                Projects coming soon
+              </h3>
+              <p className="mt-2 text-slate-600">
+                New engineering projects will be published here as they become
+                available.
               </p>
-              <div className="project-tags">
-                <span>ESP32</span>
-                <span>Python</span>
-                <span>YOLOv8</span>
-                <span>MQTT</span>
-              </div>
-            </article>
+            </div>
+          ) : (
+            <div className="project-grid">
+              {publishedProjects.map((project, projectIndex) => {
+                const additionalImages = projectImages.filter(
+                  (image) => image.project_id === project.id,
+                );
 
-            <article className="project-card">
-              <span className="project-number">PROJECT 02</span>
-              <h3>Network Infrastructure Labs</h3>
-              <p>
-                Practical networking exercises involving VLANs, routing,
-                switching, IP addressing and network services using
-                simulation and configuration tools.
-              </p>
-              <div className="project-tags">
-                <span>Cisco</span>
-                <span>Huawei eNSP</span>
-                <span>GNS3</span>
-                <span>Packet Tracer</span>
-              </div>
-            </article>
+                const mainImagePath =
+                  project.cover_image_path ||
+                  additionalImages[0]?.image_path ||
+                  null;
 
-            <article className="project-card">
-              <span className="project-number">EXPERIENCE 03</span>
-              <h3>Network Troubleshooting</h3>
-              <p>
-                Practical troubleshooting experience during a SOCATEL
-                internship, investigating connectivity issues involving
-                DHCP addressing, switch ports and network access.
-              </p>
-              <div className="project-tags">
-                <span>DHCP</span>
-                <span>Windows</span>
-                <span>Networking</span>
-              </div>
-            </article>
+                const mainImageUrl = mainImagePath
+                  ? supabase.storage
+                      .from("portfolio-public")
+                      .getPublicUrl(mainImagePath).data.publicUrl
+                  : null;
 
-            <article className="project-card">
-              <span className="project-number">MORE COMING</span>
-              <h3>More engineering work</h3>
-              <p>
-                This portfolio will grow as new software, networking and
-                embedded systems projects are completed and published.
-              </p>
-              <div className="project-tags">
-                <span>Engineering</span>
-                <span>Development</span>
-                <span>Innovation</span>
-              </div>
-            </article>
-          </div>
+                const galleryImages = additionalImages.filter(
+                  (image) => image.image_path !== mainImagePath,
+                );
+
+                return (
+                  <article
+                    key={project.id}
+                    className="project-card overflow-hidden"
+                  >
+                    {mainImageUrl && (
+                      <div className="mb-5 overflow-hidden rounded-lg">
+                        <div className="relative h-52 w-full">
+                          <Image
+                            src={mainImageUrl}
+                            alt={project.title}
+                            fill
+                            sizes="(max-width: 768px) 100vw, 50vw"
+                            loading={projectIndex === 0 ? "eager" : "lazy"}
+                            className="rounded-lg object-cover"
+                          />
+                        </div>
+                      </div>
+                    )}
+
+                    <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
+                      <span className="project-number">{project.category}</span>
+
+                      {project.is_featured && (
+                        <span className="rounded-full bg-blue-100 px-3 py-1 text-xs font-semibold text-blue-700">
+                          Featured
+                        </span>
+                      )}
+                    </div>
+
+                    <h3>{project.title}</h3>
+
+                    <p>{project.summary}</p>
+
+                    {project.technologies &&
+                      project.technologies.length > 0 && (
+                        <div className="project-tags">
+                          {project.technologies.map(
+                            (technology: string, index: number) => (
+                              <span key={`${technology}-${index}`}>
+                                {technology}
+                              </span>
+                            ),
+                          )}
+                        </div>
+                      )}
+
+                    {galleryImages.length > 0 && (
+                      <div className="mt-5 grid grid-cols-3 gap-2">
+                        {galleryImages.map((image) => {
+                          const imageUrl = supabase.storage
+                            .from("portfolio-public")
+                            .getPublicUrl(image.image_path).data.publicUrl;
+
+                          return (
+                            <div
+                              key={image.id}
+                              className="relative h-20 w-full"
+                            >
+                              <Image
+                                src={imageUrl}
+                                alt={image.alt_text || project.title}
+                                fill
+                                sizes="(max-width: 768px) 33vw, 16vw"
+                                className="rounded-md object-cover"
+                              />
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      {project.github_url && (
+                        <a
+                          href={project.github_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          GitHub ↗
+                        </a>
+                      )}
+
+                      {project.live_demo_url && (
+                        <a
+                          href={project.live_demo_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          Live Demo ↗
+                        </a>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+          )}
         </div>
       </section>
 
+      {/* SKILLS */}
       <section className="section section-alt" id="skills">
         <div className="section-container">
           <SectionHeading
@@ -230,32 +387,32 @@ export default function Home() {
             <article className="skill-card">
               <h3>Software Development</h3>
               <p>
-                Programming, application development, Python and
-                problem-solving through software.
+                Programming, application development, Python and problem-solving
+                through software.
               </p>
             </article>
 
             <article className="skill-card">
               <h3>Embedded Systems & IoT</h3>
               <p>
-                ESP32 projects, microcontrollers, sensors, device
-                communication and automation.
+                ESP32 projects, microcontrollers, sensors, device communication
+                and automation.
               </p>
             </article>
 
             <article className="skill-card">
               <h3>Network Platforms</h3>
               <p>
-                Cisco Packet Tracer, Huawei eNSP, GNS3 and practical
-                device configuration.
+                Cisco Packet Tracer, Huawei eNSP, GNS3 and practical device
+                configuration.
               </p>
             </article>
 
             <article className="skill-card">
               <h3>Systems & Linux</h3>
               <p>
-                Ubuntu, Linux administration fundamentals, virtualization
-                and network services.
+                Ubuntu, Linux administration fundamentals, virtualization and
+                network services.
               </p>
             </article>
 
@@ -270,14 +427,126 @@ export default function Home() {
         </div>
       </section>
 
+      {/* DYNAMIC CERTIFICATIONS */}
+      {publishedCertifications.length > 0 && (
+        <section className="section" id="certifications">
+          <div className="section-container">
+            <SectionHeading
+              eyebrow="04 / PROFESSIONAL DEVELOPMENT"
+              title="Certifications & credentials."
+              description="Professional certifications and credentials that support my ongoing engineering development."
+            />
+
+            <div className="grid gap-6 md:grid-cols-2">
+              {publishedCertifications.map((certification) => {
+                const certificateFileUrl = certification.file_path
+                  ? supabase.storage
+                      .from("portfolio-public")
+                      .getPublicUrl(certification.file_path).data.publicUrl
+                  : null;
+
+                return (
+                  <article
+                    key={certification.id}
+                    className="rounded-xl border border-slate-200 bg-white p-6 shadow-sm"
+                  >
+                    <div className="flex items-start justify-between gap-4">
+                      <div>
+                        <h3 className="text-xl font-semibold text-slate-900">
+                          {certification.title}
+                        </h3>
+
+                        <p className="mt-2 text-sm font-medium text-blue-700">
+                          {certification.issuing_organization}
+                        </p>
+                      </div>
+
+                      <span className="shrink-0 rounded-full bg-green-100 px-3 py-1 text-xs font-semibold text-green-700">
+                        Published
+                      </span>
+                    </div>
+
+                    {certification.description && (
+                      <p className="mt-4 text-sm leading-6 text-slate-600">
+                        {certification.description}
+                      </p>
+                    )}
+
+                    <div className="mt-5 space-y-2 text-sm text-slate-600">
+                      {certification.issue_date && (
+                        <p>
+                          <span className="font-medium text-slate-800">
+                            Issued:
+                          </span>{" "}
+                          {formatDate(certification.issue_date)}
+                        </p>
+                      )}
+
+                      {certification.expiry_date && (
+                        <p>
+                          <span className="font-medium text-slate-800">
+                            Expires:
+                          </span>{" "}
+                          {formatDate(certification.expiry_date)}
+                        </p>
+                      )}
+
+                      {certification.credential_id && (
+                        <p className="break-all">
+                          <span className="font-medium text-slate-800">
+                            Credential ID:
+                          </span>{" "}
+                          {certification.credential_id}
+                        </p>
+                      )}
+                    </div>
+
+                    <div className="mt-6 flex flex-wrap gap-3">
+                      {certificateFileUrl && (
+                        <a
+                          href={certificateFileUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-lg bg-blue-600 px-4 py-2 text-sm font-medium text-white hover:bg-blue-700"
+                        >
+                          View Certificate ↗
+                        </a>
+                      )}
+
+                      {certification.credential_url && (
+                        <a
+                          href={certification.credential_url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-flex items-center rounded-lg border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-100"
+                        >
+                          Verify Credential ↗
+                        </a>
+                      )}
+                    </div>
+                  </article>
+                );
+              })}
+            </div>
+
+            <div className="mt-8 text-center">
+              <Link href="/certifications" className="secondary-button">
+                View all certifications →
+              </Link>
+            </div>
+          </div>
+        </section>
+      )}
+
+      {/* CONTACT */}
       <section className="section" id="contact">
         <div className="section-container">
           <div className="contact-panel">
             <div>
               <h2>Lets build something meaningful.</h2>
               <p>
-                Interested in engineering, technology or collaboration?
-                I would be glad to connect.
+                Interested in engineering, technology or collaboration? I would
+                be glad to connect.
               </p>
             </div>
 
@@ -288,12 +557,27 @@ export default function Home() {
         </div>
       </section>
 
+      {/* FOOTER */}
       <footer className="site-footer">
         <div className="section-container footer-content">
-          <span>© 2026 Nyanyoh Divine</span>
+          <span>© {new Date().getFullYear()} Nyanyoh Divine</span>
           <span>Computer Engineer | Network Engineering</span>
         </div>
       </footer>
     </main>
+  );
+}
+
+export default function Home() {
+  return (
+    <Suspense
+      fallback={
+        <main className="min-h-screen">
+          <p className="sr-only">Loading portfolio...</p>
+        </main>
+      }
+    >
+      <HomeContent />
+    </Suspense>
   );
 }
